@@ -1,0 +1,9 @@
+Necesidad,Requisito,Historia_Usuario,Caso_Uso,Diseno,Codigo,Prueba,Estado
+"Reportar delitos urbanos facilmente",RF-01,US-01,CU-01,DS-01 (#view-citizen),handleFormSubmit(),TC-01,Cubierto
+"Consultar estado del reporte ciudadano",RF-02,US-02,CU-02,DS-02 (#folioInput),consultFolio(),TC-02,Cubierto
+"Proteger acceso al Centro de Mando",RF-03,US-03,CU-03,DS-03 (#pinModal),checkPin(),TC-03,Cubierto
+"Gestionar y despachar incidentes en mapa",RF-04,US-04,CU-04,DS-04 (#view-police),updateDashboard(),TC-04,Cubierto
+"Controlar tiempos criticos SLA y exportar",RF-05,US-05,CU-05,DS-05 (#reportsList),slaBreached(),TC-05,Cubierto
+"Evitar saturacion de almacenamiento local",RNF-01,US-06,CU-06,DS-06 (#crimeImage),compressImage(),TC-06,Cubierto
+"Prevenir ejecucion de scripts maliciosos",RNF-02,US-07,CU-07,DS-07 (Global DOM),esc(),TC-07,Cubierto
+"Adaptabilidad movil y modo oscuro",RNF-03,US-08,CU-08,DS-08 (html.dark),toggleTheme(),TC-08,Cubierto

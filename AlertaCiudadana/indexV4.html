@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlertaCiudadana v4.0 - Sistema Validado de Gestión de Incidentes (Colombia)</title>
+<script>try{var t=localStorage.getItem('ac_theme');if(t==='dark'||(!t&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}</script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+#map{height:440px;width:100%;border-radius:.75rem;z-index:10}
+#miniMap{height:230px;width:100%;border-radius:.75rem;z-index:10}
+.custom-scrollbar::-webkit-scrollbar{width:6px}
+.custom-scrollbar::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+.custom-pin{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;color:#fff;font-weight:bold;font-size:11px;box-shadow:0 4px 6px -1px rgba(0,0,0,.3);border:2px solid #fff}
+@keyframes pulse-ring{0%,100%{opacity:1}50%{opacity:.4}}
+.sla{animation:pulse-ring 1.2s infinite}
+/* ===== MODO OSCURO ===== */
+html.dark body{background:#0b1220;color:#e2e8f0}
+html.dark .bg-white,html.dark .card{background:#1e293b}
+html.dark .card{border-color:#334155}
+html.dark .bg-slate-50{background:#111c30}
+html.dark .bg-slate-100{background:#334155}
+html.dark .border-slate-200,html.dark .border-slate-100,html.dark .border-slate-200\/60{border-color:#334155}
+html.dark .text-slate-900{color:#f8fafc}
+html.dark .text-slate-800,html.dark .text-slate-700{color:#e2e8f0}
+html.dark .text-slate-600{color:#cbd5e1}
+html.dark .text-slate-500{color:#94a3b8}
+html.dark .bg-red-50,html.dark .bg-red-100{background:rgba(220,38,38,.16)}
+html.dark .bg-amber-50,html.dark .bg-amber-100{background:rgba(245,158,11,.16)}
+html.dark .bg-blue-50,html.dark .bg-blue-100{background:rgba(59,130,246,.18)}
+html.dark .bg-emerald-50,html.dark .bg-emerald-100{background:rgba(16,185,129,.16)}
+html.dark .text-red-600,html.dark .text-red-700{color:#f87171}
+html.dark .text-amber-500,html.dark .text-amber-600,html.dark .text-amber-700,html.dark .text-amber-800{color:#fbbf24}
+html.dark .text-blue-600,html.dark .text-blue-700,html.dark .text-blue-800{color:#60a5fa}
+html.dark .text-emerald-600,html.dark .text-emerald-700,html.dark .text-emerald-800{color:#34d399}
+html.dark .border-red-200{border-color:rgba(248,113,113,.4)}
+html.dark .border-amber-200{border-color:rgba(251,191,36,.4)}
+html.dark .border-blue-200{border-color:rgba(96,165,250,.4)}
+html.dark .border-emerald-200{border-color:rgba(52,211,153,.4)}
+html.dark .hover\:bg-red-100:hover{background:rgba(220,38,38,.28)}
+html.dark .hover\:bg-blue-100:hover{background:rgba(59,130,246,.3)}
+html.dark .hover\:bg-amber-100:hover{background:rgba(245,158,11,.3)}
+html.dark .hover\:bg-emerald-100:hover{background:rgba(16,185,129,.3)}
+html.dark .inp,html.dark .sinp,html.dark input:not([type=checkbox]):not([type=file]),html.dark textarea,html.dark select{background:#111c30;border-color:#334155;color:#e2e8f0;color-scheme:dark}
+html.dark input[type=file]{color-scheme:dark}
+html.dark ::placeholder{color:#64748b}
+html.dark .tb{background:#334155;color:#e2e8f0}
+html.dark .tb:hover{background:#475569}
+html.dark a.keep-white{background:#fff;color:#dc2626}
+html.dark a.keep-white span.bg-red-100{background:#fee2e2}
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb{background:#475569}
+html.dark .leaflet-container{background:#1e293b}
+html.dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.95) contrast(.9)}
+html.dark .leaflet-popup-content-wrapper,html.dark .leaflet-popup-tip{background:#1e293b;color:#e2e8f0}
+
+</style>
+<style type="text/tailwindcss">
+.lbl{@apply block text-xs font-bold text-slate-700 uppercase mb-1}
+.inp{@apply w-full border border-slate-200 rounded-xl p-3 bg-slate-50 text-sm outline-none focus:ring-2 focus:ring-blue-500 transition}
+.sinp{@apply text-xs border border-slate-200 rounded-lg p-2 bg-slate-50 outline-none}
+.card{@apply bg-white p-5 rounded-2xl border border-slate-200 shadow-sm}
+.tb{@apply px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5}
+.h4{@apply font-bold text-slate-800 text-sm flex items-center gap-2}
+</style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 antialiased min-h-screen flex flex-col">
+
+<!-- Toast -->
+<div id="toast" class="fixed top-20 right-5 z-[60] transform translate-x-full transition-transform duration-300 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 border border-slate-700">
+  <i id="toast-icon" data-lucide="info" class="w-5 h-5 text-blue-400"></i>
+  <span id="toast-msg" class="text-xs font-medium">Notificación</span>
+</div>
+
+<!-- Header -->
+<header class="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
+    <div class="flex items-center gap-3">
+      <div class="bg-red-600 p-2 rounded-lg"><i data-lucide="shield-alert" class="w-6 h-6"></i></div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight leading-none flex items-center gap-2">AlertaCiudadana
+          <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-600 uppercase">Colombia · v4.0</span></h1>
+        <p class="text-xs text-slate-400">Sistema local de gestión de incidentes urbanos</p>
+      </div>
+    </div>
+    <div class="flex gap-2 bg-slate-800 p-1.5 rounded-xl border border-slate-700">
+      <button id="tab-citizen-btn" onclick="switchTab('citizen')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 text-white shadow transition flex items-center gap-2">
+        <i data-lucide="user-plus" class="w-4 h-4"></i> Reportar Incidente</button>
+      <button id="tab-police-btn" onclick="switchTab('police')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-300 hover:text-white transition flex items-center gap-2">
+        <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Centro de Mando (CAD)
+        <span id="tab-badge" title="Alertas de prioridad alta pendientes" class="hidden bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full sla">0</span></button>
+      <button id="themeBtn" onclick="toggleTheme()" title="Modo claro / oscuro" class="px-3 py-2 rounded-lg text-slate-300 hover:text-white transition"><i data-lucide="moon" class="w-4 h-4"></i></button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto p-4 md:p-6 flex-grow w-full">
+
+<!-- ================= CIUDADANO ================= -->
+<section id="view-citizen" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+      <div>
+        <h2 class="text-xl font-bold text-slate-900">Registrar Nuevo Reporte</h2>
+        <p class="text-slate-500 text-xs">Completa los campos obligatorios. Usa GPS o toca el mini-mapa para georreferenciar el incidente.</p>
+      </div>
+      <span id="formProgressBadge" class="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Completitud: 25%</span>
+    </div>
+    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
+      <div id="formProgressBar" class="h-full bg-blue-600 transition-all duration-300" style="width: 25%"></div>
+    </div>
+
+    <form id="crimeForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><label class="lbl">Tipo de Delito / Incidente *</label>
+          <select id="crimeType" onchange="updateFormProgress()" required class="inp">
+            <option value="">Seleccione...</option>
+            <option value="Robo / Asalto">Robo / Asalto a mano armada</option>
+            <option value="Robo a Vehículo">Hurto de vehículo / autopartes</option>
+            <option value="Vandalismo">Vandalismo / Daño en bien ajeno</option>
+            <option value="Violencia Intrafamiliar">Violencia / Agresión física</option>
+            <option value="Actividad Sospechosa">Actividad Sospechosa / Microtráfico</option>
+            <option value="Otro">Otro Incidente</option>
+          </select></div>
+        <div><label class="lbl">Nivel de Prioridad *</label>
+          <select id="crimeUrgency" required class="inp">
+            <option value="Baja">Baja (Ocurrió con anterioridad)</option>
+            <option value="Media">Media (Sin riesgo inminente a la vida)</option>
+            <option value="Alta">Alta (Delito EN CURSO / Emergencia)</option>
+          </select></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><label class="lbl">Fecha y Hora *</label>
+          <input type="datetime-local" id="crimeTime" required class="inp"></div>
+        <div><label class="lbl">Dirección / Ubicación *</label>
+          <div class="flex gap-2">
+            <input type="text" id="crimeLocation" oninput="updateFormProgress()" placeholder="Ej: Cra 7 # 32-10, Bogotá" required class="inp">
+            <button type="button" onclick="getLocation()" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition shrink-0">
+              <i data-lucide="crosshair" class="w-4 h-4"></i> GPS</button>
+          </div></div>
+      </div>
+
+      <div><label class="lbl">Descripción de los Hechos <span id="descCount" class="normal-case font-normal text-slate-400">(0/500)</span></label>
+        <textarea id="crimeDescription" rows="3" maxlength="500" oninput="$('descCount').textContent='('+this.value.length+'/500)'" placeholder="Proporciona detalles útiles (aspecto de implicados, placas de vehículos, etc.)..." class="inp"></textarea></div>
+
+      <div><label class="lbl">Adjuntar Evidencia (Foto / Captura)</label>
+        <input type="file" id="crimeImage" accept="image/*" onchange="previewImage(event)" class="block w-full text-xs text-slate-500 cursor-pointer border border-slate-200 rounded-xl p-2 bg-slate-50">
+        <div id="imagePreviewContainer" class="hidden mt-3 relative w-32 h-32 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+          <img id="imagePreview" class="w-full h-full object-cover" src="" alt="Previsualización">
+          <button type="button" onclick="removeImage()" class="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 shadow hover:bg-red-700 transition"><i data-lucide="x" class="w-3 h-3"></i></button>
+        </div></div>
+
+      <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="isAnonymous" onchange="toggleAnon(this.checked)" class="w-4 h-4 text-blue-600 rounded">
+          <label for="isAnonymous" class="text-xs font-semibold text-slate-700 cursor-pointer">Realizar Denuncia Anónima</label></div>
+        <div id="userInfoFields" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label class="block text-xs font-medium text-slate-600 mb-1">Nombre Completo</label>
+            <input type="text" id="userName" placeholder="Tu nombre" class="w-full border border-slate-200 rounded-lg p-2.5 text-sm bg-white outline-none"></div>
+          <div><label class="block text-xs font-medium text-slate-600 mb-1">Teléfono de Contacto</label>
+            <input type="tel" id="userPhone" placeholder="300 000 0000" class="w-full border border-slate-200 rounded-lg p-2.5 text-sm bg-white outline-none"></div>
+        </div>
+      </div>
+
+      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg transition flex justify-center items-center gap-2 text-sm">
+        <i data-lucide="send" class="w-4 h-4"></i> Enviar Reporte al Sistema</button>
+    </form>
+
+    <!-- Comprobante Persistente de Folio (CR-01 / RF-01 v1.2) -->
+    <div id="receiptBanner" class="hidden mt-5 p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+      <div class="space-y-1">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+          <i data-lucide="shield-check" class="w-4 h-4"></i> Comprobante Oficial de Denuncia (CR-01)
+        </span>
+        <p class="text-xs text-slate-800">Guarda este código único para consultar el seguimiento de tu caso:
+          <strong id="receiptFolio" class="text-sm font-black text-emerald-900 bg-white px-2.5 py-0.5 rounded-lg border border-emerald-300 ml-1 select-all">REP-0000</strong>
+        </p>
+        <p id="receiptMeta" class="text-[11px] text-slate-600"></p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button type="button" onclick="copyReceiptFolio()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow transition flex items-center gap-1.5">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copiar Folio
+        </button>
+        <button type="button" onclick="$('receiptBanner').classList.add('hidden')" title="Cerrar comprobante" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 transition">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="space-y-6">
+    <div class="bg-gradient-to-br from-red-600 to-red-700 text-white p-6 rounded-2xl shadow-md space-y-4">
+      <div>
+        <span class="bg-red-800 text-red-100 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Líneas Directas Colombia</span>
+        <h3 class="font-bold text-lg mt-1">¿Riesgo Inminente?</h3>
+        <p class="text-xs text-red-100 mt-1 leading-relaxed">Si estás presenciando un delito en progreso o requieres atención médica inmediata, comunícate con las autoridades oficiales.</p>
+      </div>
+      <div class="space-y-2 pt-2 border-t border-red-500/40">
+        <a href="tel:123" class="keep-white flex items-center justify-between bg-white text-red-600 px-4 py-2.5 rounded-xl font-bold text-xs shadow hover:bg-red-50 transition">
+          <span class="flex items-center gap-2"><i data-lucide="phone-call" class="w-4 h-4"></i> Línea Única de Emergencias</span><span class="text-sm bg-red-100 px-2 py-0.5 rounded">123</span></a>
+        <a href="tel:155" class="flex items-center justify-between bg-red-800/60 text-white px-4 py-2 rounded-xl font-medium text-xs hover:bg-red-800 transition">
+          <span class="flex items-center gap-2"><i data-lucide="shield" class="w-4 h-4"></i> Línea Orientación Mujeres</span><span class="text-xs bg-red-900 px-2 py-0.5 rounded">155</span></a>
+        <a href="tel:165" class="flex items-center justify-between bg-red-800/60 text-white px-4 py-2 rounded-xl font-medium text-xs hover:bg-red-800 transition">
+          <span class="flex items-center gap-2"><i data-lucide="alert-triangle" class="w-4 h-4"></i> Gaula (Anti-Extorsión)</span><span class="text-xs bg-red-900 px-2 py-0.5 rounded">165</span></a>
+      </div>
+    </div>
+
+    <!-- Mini-mapa para fijar ubicación -->
+    <div class="card space-y-3">
+      <div class="flex items-center justify-between">
+        <h4 class="h4"><i data-lucide="map-pin" class="text-blue-600 w-4 h-4"></i> Ubicación Precisa</h4>
+        <span id="gpsStatusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Por defecto</span>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">Toca el mapa para marcar el punto exacto, o usa el botón <strong>GPS</strong>.</p>
+      <div id="miniMap"></div>
+      <p id="coordsLabel" class="text-[11px] text-slate-500 font-medium">Sin punto seleccionado (se usará Bogotá centro por defecto).</p>
+    </div>
+
+    <!-- Consulta por folio + Historial Rápido -->
+    <div class="card space-y-3">
+      <h4 class="h4"><i data-lucide="search" class="text-blue-600 w-4 h-4"></i> Consultar Estado de mi Reporte</h4>
+      <div class="flex gap-2">
+        <input id="folioInput" onkeydown="if(event.key==='Enter')consultFolio()" placeholder="REP-1234" class="sinp w-full uppercase">
+        <button onclick="consultFolio()" class="bg-blue-600 text-white text-xs font-bold px-3 rounded-lg hover:bg-blue-700 transition">Buscar</button>
+      </div>
+      <div id="folioResult" class="text-xs text-slate-600 leading-relaxed"></div>
+      <div id="recentFoliosBox" class="pt-2 border-t border-slate-100 space-y-1.5">
+        <span class="text-[10px] font-bold uppercase text-slate-400 block">Folios recientes en este dispositivo:</span>
+        <div id="recentFoliosList" class="flex flex-wrap gap-1.5"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CAD ================= -->
+<section id="view-police" class="hidden space-y-6">
+  <div class="card !p-4 flex flex-wrap justify-between items-center gap-4">
+    <div>
+      <h2 class="text-base font-bold text-slate-900">Centro de Mando Asistido por Computadora (CAD)</h2>
+      <p class="text-xs text-slate-500">Supervisión en tiempo real e historial de incidentes reportados</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <button onclick="exportCSV()" class="tb"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> CSV</button>
+      <button onclick="exportJSON()" class="tb"><i data-lucide="download" class="w-3.5 h-3.5"></i> Respaldo JSON</button>
+      <button onclick="fitAll()" class="tb"><i data-lucide="maximize" class="w-3.5 h-3.5"></i> Ver todos</button>
+      <button onclick="resetToSampleData()" class="tb"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Cargar Ejemplos Bogotá</button>
+      <button onclick="clearAllReports()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition flex items-center gap-1.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Limpiar Todo</button>
+      <button onclick="logout()" class="tb"><i data-lucide="log-out" class="w-3.5 h-3.5"></i> Salir</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div class="card !p-4 flex items-center justify-between"><div><p class="text-xs font-bold text-slate-400 uppercase">Total Reportes</p><p id="stat-total" class="text-2xl font-black text-slate-900 mt-1">0</p></div><div class="p-3 bg-slate-100 text-slate-700 rounded-xl"><i data-lucide="archive" class="w-6 h-6"></i></div></div>
+    <div class="card !p-4 flex items-center justify-between"><div><p class="text-xs font-bold text-slate-400 uppercase">Prioridad Alta</p><p id="stat-high" class="text-2xl font-black text-red-600 mt-1">0</p></div><div class="p-3 bg-red-50 text-red-600 rounded-xl"><i data-lucide="alert-octagon" class="w-6 h-6"></i></div></div>
+    <div class="card !p-4 flex items-center justify-between"><div><p class="text-xs font-bold text-slate-400 uppercase">SLA Vencido (&gt;30m)</p><p id="stat-sla" class="text-2xl font-black text-rose-600 mt-1">0</p><p class="text-[11px] text-slate-400">Críticos sin atender</p></div><div class="p-3 bg-rose-50 text-rose-600 rounded-xl"><i data-lucide="clock-alert" class="w-6 h-6"></i></div></div>
+    <div class="card !p-4 flex items-center justify-between"><div><p class="text-xs font-bold text-slate-400 uppercase">En Despacho / Pendientes</p><p id="stat-pending" class="text-2xl font-black text-amber-500 mt-1">0</p></div><div class="p-3 bg-amber-50 text-amber-500 rounded-xl"><i data-lucide="radio" class="w-6 h-6"></i></div></div>
+    <div class="card !p-4 flex items-center justify-between"><div><p class="text-xs font-bold text-slate-400 uppercase">Casos Atendidos</p><p id="stat-resolved" class="text-2xl font-black text-emerald-600 mt-1">0</p><p id="stat-rate" class="text-[11px] text-slate-400">0 % de resolución</p></div><div class="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><i data-lucide="check-check" class="w-6 h-6"></i></div></div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 card !p-4 flex flex-col">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="h4"><i data-lucide="map-pin" class="text-blue-600 w-4 h-4"></i> Mapa Operativo (Centrado en Colombia)</h3>
+        <span class="text-[11px] text-slate-400">Clic en un caso de la lista para centrarlo</span>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <div class="card !p-4 flex flex-col">
+      <div class="space-y-2 mb-3">
+        <div class="flex justify-between items-center">
+          <h3 class="h4"><i data-lucide="list" class="text-blue-600 w-4 h-4"></i> Despacho de Unidades</h3>
+          <span id="reportsCountBadge" class="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">0 casos</span>
+        </div>
+        <div class="flex gap-2">
+          <input type="text" id="searchInput" oninput="updateDashboard()" placeholder="Buscar folio, tipo o dirección..." class="sinp w-full">
+          <select id="filterUrgency" onchange="updateDashboard()" class="sinp shrink-0">
+            <option value="ALL">Prioridad: Todas</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <select id="filterStatus" onchange="updateDashboard()" class="sinp">
+            <option value="ALL">Estado: Todos</option><option>Pendiente</option><option>En Despacho</option><option>Atendido</option></select>
+          <select id="filterType" onchange="updateDashboard()" class="sinp"><option value="ALL">Tipo: Todos</option></select>
+          <select id="sortBy" onchange="updateDashboard()" class="sinp">
+            <option value="new">Más recientes</option><option value="old">Más antiguos</option><option value="prio">Por prioridad</option></select>
+        </div>
+      </div>
+      <div class="overflow-y-auto max-h-[330px] space-y-2.5 pr-1 custom-scrollbar" id="reportsList"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 class="h4 mb-4"><i data-lucide="bar-chart-3" class="text-blue-600 w-4 h-4"></i> Analítica Estadística de Incidentes</h3>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-1 h-64"><p class="text-[11px] font-bold text-slate-400 uppercase text-center mb-1">Por tipo</p><div class="h-56"><canvas id="crimeChart"></canvas></div></div>
+      <div class="h-64"><p class="text-[11px] font-bold text-slate-400 uppercase text-center mb-1">Por estado</p><div class="h-56"><canvas id="statusChart"></canvas></div></div>
+      <div class="h-64"><p class="text-[11px] font-bold text-slate-400 uppercase text-center mb-1">Por prioridad</p><div class="h-56"><canvas id="urgencyChart"></canvas></div></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- Modal de expediente -->
+<div id="detailModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+  <div class="bg-white w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl shadow-xl border border-slate-100 p-6 space-y-4">
+    <div class="flex justify-between items-start border-b border-slate-100 pb-3">
+      <div>
+        <div class="flex items-center gap-2">
+          <span id="modalId" class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">FOLIO</span>
+          <span id="modalStatusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full">ESTADO</span>
+        </div>
+        <h3 id="modalType" class="text-lg font-bold text-slate-900 mt-1">Tipo de Delito</h3>
+      </div>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="space-y-3 text-xs">
+      <div><span class="text-slate-400 block font-bold uppercase">Ubicación</span><p id="modalLocation" class="text-slate-800 text-sm font-medium mt-0.5"></p></div>
+      <div class="grid grid-cols-3 gap-2">
+        <div><span class="text-slate-400 block font-bold uppercase">Fecha y Hora</span><p id="modalTime" class="text-slate-700 mt-0.5"></p></div>
+        <div><span class="text-slate-400 block font-bold uppercase">Prioridad</span><p id="modalUrgency" class="text-slate-700 font-bold mt-0.5"></p></div>
+        <div><span class="text-slate-400 block font-bold uppercase">Transcurrido</span><p id="modalElapsed" class="text-slate-700 font-bold mt-0.5"></p></div>
+      </div>
+      <div><span class="text-slate-400 block font-bold uppercase">Descripción</span><p id="modalDesc" class="text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed mt-0.5"></p></div>
+      <div><span class="text-slate-400 block font-bold uppercase">Información del Denunciante</span><p id="modalUser" class="text-slate-700 font-medium mt-0.5"></p></div>
+      <div id="modalImageContainer" class="hidden"><span class="text-slate-400 block font-bold uppercase mb-1">Evidencia Adjunta</span>
+        <img id="modalImage" class="w-full h-44 object-cover rounded-xl border border-slate-200 shadow-inner" src="" alt="Evidencia"></div>
+    </div>
+
+    <!-- Bitácora -->
+    <div class="space-y-2 text-xs border-t border-slate-100 pt-3">
+      <span class="text-slate-400 block font-bold uppercase">Bitácora de seguimiento</span>
+      <ul id="modalLog" class="max-h-24 overflow-y-auto space-y-1 text-slate-600 custom-scrollbar"></ul>
+      <div class="flex gap-2">
+        <input id="noteInput" onkeydown="if(event.key==='Enter')addNote()" placeholder="Agregar nota de seguimiento..." class="sinp w-full">
+        <button onclick="addNote()" class="bg-blue-600 text-white px-3 rounded-lg font-bold hover:bg-blue-700 transition">Agregar</button>
+      </div>
+    </div>
+
+    <div class="pt-2 border-t border-slate-100 space-y-2">
+      <span class="text-[11px] font-bold text-slate-500 uppercase block">Actualizar Estado del Caso:</span>
+      <div class="grid grid-cols-3 gap-2">
+        <button onclick="changeReportStatus('Pendiente')" class="py-2 px-3 rounded-xl text-xs font-bold border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition">Pendiente</button>
+        <button onclick="changeReportStatus('En Despacho')" class="py-2 px-3 rounded-xl text-xs font-bold border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition">En Despacho</button>
+        <button onclick="changeReportStatus('Atendido')" class="py-2 px-3 rounded-xl text-xs font-bold border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition">Atendido</button>
+      </div>
+      <div class="flex gap-2 pt-1">
+        <button onclick="copyFolio()" class="tb"><i data-lucide="copy" class="w-3.5 h-3.5"></i> Copiar folio</button>
+        <button onclick="deleteReport()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition flex items-center gap-1.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Eliminar caso</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal PIN -->
+<div id="pinModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+  <div class="bg-white w-full max-w-xs rounded-2xl shadow-xl p-6 space-y-4 text-center">
+    <div class="mx-auto w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center"><i data-lucide="lock" class="w-6 h-6 text-slate-700"></i></div>
+    <div><h3 class="font-bold text-slate-900">Acceso Seguro CAD (RNF-04)</h3><p class="text-xs text-slate-500 mt-1">Verificación SHA-256 con bloqueo anti-fuerza bruta (máx. 3 intentos).<br><span class="text-slate-400">(Demo: 1234)</span></p><p id="pinAttemptsLabel" class="text-[11px] font-bold text-amber-600 mt-1 hidden"></p></div>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="8" onkeydown="if(event.key==='Enter')checkPin()" class="inp text-center tracking-widest">
+    <div class="grid grid-cols-2 gap-2">
+      <button onclick="closePin()" class="py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">Cancelar</button>
+      <button onclick="checkPin()" class="py-2 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition">Ingresar</button>
+    </div>
+  </div>
+</div>
+
+<footer class="bg-slate-900 text-slate-400 py-6 mt-12 border-t border-slate-800">
+  <div class="max-w-7xl mx-auto px-4 text-center space-y-2">
+    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Desarrollado por</p>
+    <div class="flex flex-wrap justify-center gap-x-6 gap-y-1 text-sm font-medium text-slate-200">
+      <span>Sergio Dario Ordoñez Aguilera</span><span class="hidden md:inline text-slate-600">•</span>
+      <span>Juan Camilo Perez Chivata</span><span class="hidden md:inline text-slate-600">•</span>
+      <span>Jonathan David Bohorquez Maldonado</span>
+    </div>
+    <p class="text-[11px] text-slate-600 pt-2">© 2026 AlertaCiudadana - Sistema de Reporte de Delitos Urbano (Colombia)</p>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const BOGOTA_COORDS = { lat: 4.6097, lng: -74.0817 };
+const DB_KEY = 'delitos_colombia_db';
+// Hash SHA-256 del PIN de operador ('1234') para evitar exposición directa en texto plano (CR-SEG-01 / RNF-04)
+const PIN_HASH = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
+const MAX_PIN_ATTEMPTS = 3;
+const LOCKOUT_MS = 60000;    // Bloqueo de 60 segundos tras 3 intentos fallidos
+const SLA_MIN = 30;          // minutos máx. para atender una alerta Alta pendiente
+const ACT = "px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 text-white shadow transition flex items-center gap-2";
+const INACT = "px-4 py-2 text-xs font-semibold rounded-lg text-slate-300 hover:text-white transition flex items-center gap-2";
+
+const defaultReports = [
+  { id:"REP-1001", type:"Robo / Asalto", urgency:"Alta", location:"Av. Caracas con Calle 45, Bogotá", lat:4.6322, lng:-74.0678,
+    desc:"Sujeto en motocicleta despojó de sus pertenencias a un peatón cerca de la estación de TransMilenio.", time:"2026-10-17T09:15",
+    anonymous:true, userName:"Anónimo", userPhone:"N/A", image:null, status:"En Despacho" },
+  { id:"REP-1002", type:"Actividad Sospechosa", urgency:"Media", location:"Parque de la 93, Bogotá", lat:4.6768, lng:-74.0483,
+    desc:"Grupo de personas observando e inspeccionando vehículos estacionados en la zona durante la noche.", time:"2026-10-16T22:30",
+    anonymous:false, userName:"Carlos Ramírez", userPhone:"310 123 4567", image:null, status:"Pendiente" },
+  { id:"REP-1003", type:"Vandalismo", urgency:"Baja", location:"Carrera 7 con Calle 72, Bogotá", lat:4.6560, lng:-74.0556,
+    desc:"Pintadas y grafitis no autorizados sobre el mobiliario público de la esquina.", time:"2026-10-15T14:20",
+    anonymous:true, userName:"Anónimo", userPhone:"N/A", image:null, status:"Atendido" }
+];
+const clone = o => JSON.parse(JSON.stringify(o));
+function loadReports(){ try { return JSON.parse(localStorage.getItem(DB_KEY)) || clone(defaultReports); } catch(e){ return clone(defaultReports); } }
+
+let reports = loadReports();
+let map=null, markersGroup=null, tempSelectionMarker=null, chartInstance=null, statusChart=null, urgencyChart=null;
+let miniMap=null, miniMarker=null, base64Image=null, activeModalReportId=null;
+let currentSelectedCoords = { ...BOGOTA_COORDS };
+let locationPinned = false;          // Control de ubicación explícita (Parte 8 - Validación Prototipo)
+let pinAttempts = 0;                 // Control de fuerza bruta (CR-SEG-01 / RNF-04)
+let pinLockedUntil = 0;
+
+/* ---------- Utilidades ---------- */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function nowLocal(){ const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
+function showEl(id,on,flex){ const e=$(id); e.classList.toggle('hidden',!on); if(flex) e.classList.toggle('flex',on); }
+function genId(){ let id; do { id='REP-'+Math.floor(1000+Math.random()*9000); } while(reports.some(r=>r.id===id)); return id; }
+function elapsedMin(r){ return Math.max(0, Math.floor((Date.now()-new Date(r.time))/60000)); }
+function elapsed(r){ const m=elapsedMin(r); return m<60 ? m+' min' : m<1440 ? Math.floor(m/60)+' h' : Math.floor(m/1440)+' d'; }
+function slaBreached(r){ return r.urgency==='Alta' && r.status==='Pendiente' && elapsedMin(r)>SLA_MIN; }
+function distM(a,b,c,d){ const t=x=>x*Math.PI/180, dl=t(c-a), dn=t(d-b);
+  const h=Math.sin(dl/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dn/2)**2; return 12742000*Math.asin(Math.sqrt(h)); }
+function findDuplicate(type){ return reports.find(r=>r.type===type && r.status!=='Atendido' &&
+  distM(r.lat,r.lng,currentSelectedCoords.lat,currentSelectedCoords.lng)<150 && Math.abs(Date.now()-new Date(r.time))<864e5); }
+function addLog(r,m){ (r.log=r.log||[]).push({ t:new Date().toISOString(), m }); }
+function beep(){ try{ const c=new (window.AudioContext||window.webkitAudioContext)(), o=c.createOscillator(); o.connect(c.destination); o.frequency.value=880; o.start(); o.stop(c.currentTime+.25);}catch(e){} }
+
+function saveToBrowserStorage(){
+  try { localStorage.setItem(DB_KEY, JSON.stringify(reports)); }
+  catch(e){ showToast("Almacenamiento lleno: elimina reportes o usa imágenes más pequeñas.", "alert"); }
+  updateBadge();
+}
+function updateBadge(){
+  const n = reports.filter(r=>r.urgency==='Alta' && r.status==='Pendiente').length;
+  const b=$('tab-badge'); b.textContent=n; b.classList.toggle('hidden', !n);
+}
+function showToast(message, type='info'){
+  const icon={success:['check-circle-2','text-emerald-400'],alert:['alert-triangle','text-amber-400'],info:['info','text-blue-400']}[type]||['info','text-blue-400'];
+  $('toast-msg').innerText=message;
+  const i=$('toast-icon'); i.setAttribute('data-lucide',icon[0]); i.className='w-5 h-5 '+icon[1];
+  lucide.createIcons();
+  $('toast').classList.remove('translate-x-full');
+  clearTimeout(showToast.t); showToast.t=setTimeout(()=>$('toast').classList.add('translate-x-full'),3500);
+}
+
+/* ---------- Formulario ---------- */
+function handleFormSubmit(e){
+  e.preventDefault();
+  const isAnon=$('isAnonymous').checked, phone=$('userPhone').value.replace(/[\s-]/g,'');
+  if(!isAnon && phone && !/^3\d{9}$/.test(phone)) return showToast("Teléfono inválido: 10 dígitos iniciando en 3 (ej. 3001234567).","alert");
+  if(new Date($('crimeTime').value) > new Date()) return showToast("La fecha del incidente no puede estar en el futuro.","alert");
+  if(!locationPinned && !confirm("No has fijado un punto en el mini-mapa ni usado GPS. Se usará el centro de Bogotá por defecto.\n¿Deseas continuar con esta ubicación?")) return;
+  const type=$('crimeType').value, dup=findDuplicate(type);
+  if(dup && !confirm(`Ya existe un reporte similar cercano (${dup.id}, ${dup.status}).\n¿Deseas enviar uno nuevo de todas formas?`)) return;
+
+  const newId=genId();
+  const newReport={
+    id:newId, type, urgency:$('crimeUrgency').value, location:$('crimeLocation').value.trim(),
+    lat:currentSelectedCoords.lat, lng:currentSelectedCoords.lng,
+    desc:$('crimeDescription').value.trim()||"Sin descripción adicional.", time:$('crimeTime').value,
+    anonymous:isAnon, userName:isAnon?"Anónimo":($('userName').value.trim()||"No especificado"),
+    userPhone:isAnon?"N/A":(phone||"No especificado"), image:base64Image, status:"Pendiente", log:[]
+  };
+  addLog(newReport,'Reporte creado por el ciudadano');
+  reports.unshift(newReport);
+  saveToBrowserStorage();
+
+  // Mostrar comprobante persistente (CR-01 / RF-01 v1.2)
+  $('receiptFolio').textContent=newId;
+  $('receiptMeta').textContent=`${newReport.type} · Prioridad ${newReport.urgency} · ${new Date().toLocaleTimeString('es-CO')}`;
+  $('receiptBanner').classList.remove('hidden');
+  lucide.createIcons();
+
+  showToast(`Reporte ${newId} registrado. Usa el comprobante inferior para copiar tu folio.`,'success');
+  if(newReport.urgency==='Alta') beep();
+  $('folioInput').value=newId; consultFolio(); renderRecentFolios();
+  $('crimeForm').reset(); removeImage(); $('descCount').textContent='(0/500)';
+  $('crimeTime').value=nowLocal();
+  currentSelectedCoords={...BOGOTA_COORDS}; locationPinned=false; resetMini(); toggleAnon(false); updateFormProgress();
+}
+function copyReceiptFolio(){
+  const code=$('receiptFolio').textContent;
+  if(navigator.clipboard) navigator.clipboard.writeText(code);
+  showToast(`Folio ${code} copiado al portapapeles`,'success');
+}
+function updateFormProgress(){
+  let pct=25; // Fecha/hora y prioridad precargadas
+  if($('crimeType').value) pct+=25;
+  if($('crimeLocation').value.trim()) pct+=25;
+  if($('crimeDescription').value.trim().length>=10 || locationPinned) pct+=25;
+  $('formProgressBar').style.width=pct+'%';
+  const b=$('formProgressBadge');
+  b.textContent=`Completitud: ${pct}%`;
+  b.className=pct===100
+    ? 'text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200'
+    : 'text-[11px] font-bold px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200';
+}
+function renderRecentFolios(){
+  const box=$('recentFoliosList'); if(!box) return;
+  box.innerHTML=reports.slice(0,5).map(r=>
+    `<button type="button" onclick="$('folioInput').value='${esc(r.id)}';consultFolio()" class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 transition">${esc(r.id)}</button>`
+  ).join('');
+}
+function previewImage(event){
+  const file=event.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>compressImage(ev.target.result,d=>{ base64Image=d; $('imagePreview').src=d; $('imagePreviewContainer').classList.remove('hidden'); });
+  reader.readAsDataURL(file);
+}
+function compressImage(src,cb){ // reduce a 800px / JPEG 70% para no llenar el almacenamiento
+  const i=new Image();
+  i.onload=()=>{ const k=Math.min(1,800/Math.max(i.width,i.height)), c=document.createElement('canvas');
+    c.width=i.width*k; c.height=i.height*k; c.getContext('2d').drawImage(i,0,0,c.width,c.height); cb(c.toDataURL('image/jpeg',.7)); };
+  i.src=src;
+}
+function removeImage(){ base64Image=null; $('crimeImage').value=''; $('imagePreviewContainer').classList.add('hidden'); }
+function toggleAnon(checked){ $('userInfoFields').classList.toggle('opacity-40',checked); $('userInfoFields').classList.toggle('pointer-events-none',checked); }
+
+/* ---------- Ubicación ---------- */
+function getLocation(){
+  if(!navigator.geolocation) return showToast("Tu navegador no soporta geolocalización.","alert");
+  showToast("Obteniendo posición GPS...","info");
+  navigator.geolocation.getCurrentPosition(p=>{
+    currentSelectedCoords={lat:p.coords.latitude,lng:p.coords.longitude}; locationPinned=true;
+    $('crimeLocation').value=`GPS: ${currentSelectedCoords.lat.toFixed(4)}, ${currentSelectedCoords.lng.toFixed(4)} (Colombia)`;
+    syncMini(true); showToast("Ubicación GPS capturada","success");
+  },()=>{ showToast("No se pudo obtener el GPS. Usando posición predeterminada.","alert"); $('crimeLocation').value="Bogotá, Colombia"; });
+}
+function initMiniMap(){
+  miniMap=L.map('miniMap').setView([BOGOTA_COORDS.lat,BOGOTA_COORDS.lng],11);
+  L.tileLayer('https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'&copy; OpenStreetMap'}).addTo(miniMap);
+  miniMap.on('click',e=>{ currentSelectedCoords={lat:e.latlng.lat,lng:e.latlng.lng}; locationPinned=true;
+    $('crimeLocation').value=`Ubicación (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}) - Colombia`; syncMini(); });
+}
+function syncMini(center){
+  const p=[currentSelectedCoords.lat,currentSelectedCoords.lng];
+  if(miniMarker) miniMarker.setLatLng(p); else miniMarker=L.marker(p).addTo(miniMap);
+  if(center) miniMap.setView(p,15);
+  $('coordsLabel').textContent=`✓ Punto fijado: ${p[0].toFixed(4)}, ${p[1].toFixed(4)}`;
+  const g=$('gpsStatusBadge');
+  if(g){ g.textContent='✓ Ubicación Fijada'; g.className='text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200'; }
+  updateFormProgress();
+}
+function resetMini(){
+  if(miniMarker){ miniMap.removeLayer(miniMarker); miniMarker=null; }
+  miniMap.setView([BOGOTA_COORDS.lat,BOGOTA_COORDS.lng],11);
+  $('coordsLabel').textContent='Sin punto seleccionado (se usará Bogotá centro por defecto).';
+  const g=$('gpsStatusBadge');
+  if(g){ g.textContent='Por defecto'; g.className='text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200'; }
+}
+
+/* ---------- Consulta por folio ---------- */
+function consultFolio(){
+  const id=$('folioInput').value.trim().toUpperCase(), r=reports.find(x=>x.id===id), o=$('folioResult');
+  if(!r){ o.innerHTML='<span class="text-red-600 font-semibold">No se encontró ese folio.</span>'; return; }
+  const last=(r.log||[]).slice(-1)[0];
+  o.innerHTML=`<b>${esc(r.id)}</b> · ${esc(r.type)}<br>Estado: <b>${esc(r.status)}</b> · Prioridad ${esc(r.urgency)}`+
+    (last?`<br><span class="text-slate-400">Último movimiento: ${esc(last.m)}</span>`:'');
+}
+
+/* ---------- Navegación y acceso ---------- */
+function switchTab(tab){
+  if(tab==='police' && !sessionStorage.getItem('cad_ok')){ showEl('pinModal',true,true); setTimeout(()=>$('pinInput').focus(),50); return; }
+  showEl('view-citizen',tab==='citizen'); showEl('view-police',tab==='police');
+  $('tab-citizen-btn').className = tab==='citizen'?ACT:INACT;
+  $('tab-police-btn').className  = tab==='police'?ACT:INACT;
+  setTimeout(()=>{ if(tab==='police'){ initMap(); updateDashboard(); } else miniMap.invalidateSize(); },100);
+}
+async function sha256(str){
+  const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function checkPin(){
+  const now=Date.now(), lbl=$('pinAttemptsLabel');
+  if(now < pinLockedUntil){
+    const seg=Math.ceil((pinLockedUntil-now)/1000);
+    return showToast(`Acceso bloqueado por seguridad. Intenta en ${seg}s.`,"alert");
+  }
+  const val=$('pinInput').value;
+  if(!val) return showToast("Ingresa el PIN de operador","alert");
+  const h=await sha256(val);
+  if(h===PIN_HASH){
+    pinAttempts=0; if(lbl) lbl.classList.add('hidden');
+    sessionStorage.setItem('cad_ok','1'); closePin(); switchTab('police'); showToast("Acceso verificado al CAD","success");
+  } else {
+    pinAttempts++;
+    $('pinInput').value='';
+    if(pinAttempts>=MAX_PIN_ATTEMPTS){
+      pinLockedUntil=Date.now()+LOCKOUT_MS; pinAttempts=0;
+      if(lbl){ lbl.textContent='Bloqueado por 60 segundos (RNF-04)'; lbl.classList.remove('hidden'); }
+      showToast("3 intentos fallidos: acceso bloqueado por 60 segundos (RNF-04).","alert");
+    } else {
+      if(lbl){ lbl.textContent=`Intento fallido ${pinAttempts} de ${MAX_PIN_ATTEMPTS}`; lbl.classList.remove('hidden'); }
+      showToast(`PIN incorrecto (${pinAttempts}/${MAX_PIN_ATTEMPTS} intentos)`,"alert");
+    }
+  }
+}
+function closePin(){ showEl('pinModal',false,true); $('pinInput').value=''; }
+function logout(){ sessionStorage.removeItem('cad_ok'); switchTab('citizen'); showToast("Sesión del CAD cerrada","info"); }
+
+/* ---------- Mapa CAD ---------- */
+function initMap(){
+  if(!map){
+    map=L.map('map').setView([BOGOTA_COORDS.lat,BOGOTA_COORDS.lng],12);
+    L.tileLayer('https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',referrerPolicy:'no-referrer',crossOrigin:true,
+      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+    markersGroup=L.layerGroup().addTo(map);
+    map.on('click',e=>{
+      currentSelectedCoords={lat:e.latlng.lat,lng:e.latlng.lng}; locationPinned=true;
+      $('crimeLocation').value=`Ubicación (${e.latlng.lat.toFixed(3)}, ${e.latlng.lng.toFixed(3)}) - Bogotá`;
+      if(tempSelectionMarker) map.removeLayer(tempSelectionMarker);
+      tempSelectionMarker=L.marker(e.latlng).addTo(map).bindPopup("<b>Ubicación seleccionada</b><br>Para el nuevo formulario de reporte").openPopup();
+      syncMini(); showToast("Ubicación fijada desde el mapa","info");
+    });
+  }
+  setTimeout(()=>map&&map.invalidateSize(),250);
+}
+function fitAll(){ if(map&&reports.length) map.fitBounds(reports.map(r=>[r.lat,r.lng]),{padding:[30,30],maxZoom:15}); }
+const getMarkerColor = u => u==='Alta'?'#dc2626':u==='Media'?'#d97706':'#2563eb';
+
+/* ---------- Dashboard ---------- */
+function fillTypeFilter(){
+  const s=$('filterType');
+  [...document.querySelectorAll('#crimeType option')].filter(o=>o.value).forEach(o=>s.add(new Option(o.value,o.value)));
+}
+function sortReports(a){
+  const m=$('sortBy').value, w={Alta:0,Media:1,Baja:2}, t=r=>new Date(r.time);
+  return [...a].sort((x,y)=> m==='prio' ? w[x.urgency]-w[y.urgency]||t(y)-t(x) : m==='old' ? t(x)-t(y) : t(y)-t(x));
+}
+function updateDashboard(){
+  const fU=$('filterUrgency').value, fS=$('filterStatus').value, fT=$('filterType').value, q=$('searchInput').value.toLowerCase();
+  const filtered=sortReports(reports.filter(r=>
+    (fU==='ALL'||r.urgency===fU) && (fS==='ALL'||r.status===fS) && (fT==='ALL'||r.type===fT) &&
+    (r.id.toLowerCase().includes(q)||r.type.toLowerCase().includes(q)||r.location.toLowerCase().includes(q))));
+
+  const done=reports.filter(r=>r.status==='Atendido').length;
+  $('stat-total').innerText=reports.length;
+  $('stat-high').innerText=reports.filter(r=>r.urgency==='Alta').length;
+  if($('stat-sla')) $('stat-sla').innerText=reports.filter(r=>slaBreached(r)).length;
+  $('stat-pending').innerText=reports.filter(r=>r.status!=='Atendido').length;
+  $('stat-resolved').innerText=done;
+  $('stat-rate').innerText=(reports.length?Math.round(done/reports.length*100):0)+' % de resolución';
+  $('reportsCountBadge').innerText=`${filtered.length} de ${reports.length} casos`;
+
+  const list=$('reportsList'); list.innerHTML='';
+  if(markersGroup) markersGroup.clearLayers();
+  if(!filtered.length) list.innerHTML='<div class="text-center py-8 text-xs text-slate-400">No hay reportes que coincidan con la búsqueda.</div>';
+
+  filtered.forEach(r=>{
+    const badge=r.urgency==='Alta'?'bg-red-50 text-red-700 border-red-200':r.urgency==='Media'?'bg-amber-50 text-amber-700 border-amber-200':'bg-blue-50 text-blue-700 border-blue-200';
+    const st=r.status==='Pendiente'?'text-amber-600':r.status==='En Despacho'?'text-blue-600':'text-emerald-600';
+    const color=getMarkerColor(r.urgency), late=slaBreached(r);
+    const card=document.createElement('div');
+    card.className="p-3 bg-slate-50 border rounded-xl space-y-1.5 hover:border-blue-400 transition cursor-pointer "+(late?'border-red-400 ring-1 ring-red-300':'border-slate-200');
+    card.onclick=()=>{ if(map) map.flyTo([r.lat,r.lng],15); openModal(r.id); };
+    card.innerHTML=`
+      <div class="flex justify-between items-center">
+        <span class="font-bold text-slate-900 text-xs flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background:${color}"></span>${esc(r.id)}${late?' <span class="sla text-[10px] text-red-600">⚠ SLA</span>':''}</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full border font-bold ${badge}">${esc(r.urgency)}</span></div>
+      <div class="font-bold text-slate-800 text-xs">${esc(r.type)}</div>
+      <div class="text-[11px] text-slate-500 truncate flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3 text-slate-400"></i> ${esc(r.location)}</div>
+      <div class="flex justify-between items-center text-[11px] pt-1 border-t border-slate-200/60">
+        <span class="font-bold ${st}">${esc(r.status)} <span class="font-normal text-slate-400">· hace ${elapsed(r)}</span></span>
+        <span class="text-blue-600 text-xs font-bold">Ver detalles &rarr;</span></div>`;
+    list.appendChild(card);
+
+    if(map&&markersGroup){
+      const icon=L.divIcon({className:'custom-div-icon',html:`<div class="custom-pin" style="background-color:${color}">${esc(r.urgency[0])}</div>`,iconSize:[28,28],iconAnchor:[14,14]});
+      L.marker([r.lat,r.lng],{icon}).addTo(markersGroup).bindPopup(
+        `<div class="text-xs space-y-1 p-1"><div class="font-bold text-slate-900">${esc(r.id)} - ${esc(r.type)}</div>
+         <div class="text-slate-600">${esc(r.location)}</div>
+         <div class="text-[10px] font-bold mt-1 inline-block px-1.5 py-0.5 rounded text-white" style="background-color:${color}">Prioridad ${esc(r.urgency)}</div></div>`)
+        .on('click',()=>{});
+    }
+  });
+  lucide.createIcons(); renderCharts(); updateBadge();
+}
+
+function donut(id,old,labels,colors,data){
+  if(old) old.destroy();
+  return new Chart($(id),{type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:2,borderColor:isDark()?'#1e293b':'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}}}});
+}
+function renderCharts(){
+  Chart.defaults.color=isDark()?'#cbd5e1':'#475569'; Chart.defaults.borderColor=isDark()?'#334155':'#e2e8f0';
+  const counts={}; reports.forEach(r=>counts[r.type]=(counts[r.type]||0)+1);
+  if(chartInstance) chartInstance.destroy();
+  chartInstance=new Chart($('crimeChart').getContext('2d'),{type:'bar',
+    data:{labels:Object.keys(counts),datasets:[{label:'Número de Reportes',data:Object.values(counts),backgroundColor:'#3b82f6',borderRadius:8}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}},x:{ticks:{font:{size:9}}}}}});
+  const c=(k,v)=>reports.filter(r=>r[k]===v).length, S=['Pendiente','En Despacho','Atendido'], U=['Alta','Media','Baja'];
+  statusChart=donut('statusChart',statusChart,S,['#f59e0b','#2563eb','#059669'],S.map(v=>c('status',v)));
+  urgencyChart=donut('urgencyChart',urgencyChart,U,['#dc2626','#d97706','#2563eb'],U.map(v=>c('urgency',v)));
+}
+
+/* ---------- Modal de expediente ---------- */
+function renderLog(r){
+  $('modalLog').innerHTML=(r.log||[]).slice().reverse().map(l=>`<li><span class="text-slate-400">${new Date(l.t).toLocaleString('es-CO')}</span> — ${esc(l.m)}</li>`).join('')
+    ||'<li class="text-slate-400">Sin movimientos registrados.</li>';
+  $('modalElapsed').textContent='Hace '+elapsed(r)+(slaBreached(r)?' ⚠ SLA':'');
+}
+function openModal(id){
+  const r=reports.find(x=>x.id===id); if(!r) return;
+  activeModalReportId=id;
+  $('modalId').innerText=r.id; $('modalType').innerText=r.type; $('modalLocation').innerText=r.location;
+  $('modalUrgency').innerText=r.urgency; $('modalTime').innerText=new Date(r.time).toLocaleString('es-CO');
+  $('modalDesc').innerText=r.desc; $('modalUser').innerText=`${r.userName} (Tel: ${r.userPhone})`;
+  const b=$('modalStatusBadge'); b.innerText=r.status;
+  b.className='text-[10px] font-bold px-2 py-0.5 rounded-full '+(r.status==='Pendiente'?'bg-amber-100 text-amber-800':r.status==='En Despacho'?'bg-blue-100 text-blue-800':'bg-emerald-100 text-emerald-800');
+  if(r.image){ $('modalImage').src=r.image; showEl('modalImageContainer',true); } else showEl('modalImageContainer',false);
+  renderLog(r); showEl('detailModal',true,true); lucide.createIcons();
+}
+function closeModal(){ activeModalReportId=null; showEl('detailModal',false,true); }
+function changeReportStatus(s){
+  const r=reports.find(x=>x.id===activeModalReportId); if(!r||r.status===s) return;
+  addLog(r,`Estado: ${r.status} → ${s}`); r.status=s;
+  saveToBrowserStorage(); updateDashboard(); openModal(r.id); showToast(`Estado actualizado a: ${s}`,'success');
+}
+function addNote(){
+  const i=$('noteInput'), r=reports.find(x=>x.id===activeModalReportId);
+  if(!r||!i.value.trim()) return;
+  addLog(r,'Nota: '+i.value.trim()); i.value=''; saveToBrowserStorage(); renderLog(r);
+}
+function deleteReport(){
+  if(!activeModalReportId||!confirm("¿Eliminar este reporte definitivamente?")) return;
+  reports=reports.filter(r=>r.id!==activeModalReportId);
+  saveToBrowserStorage(); closeModal(); updateDashboard(); showToast("Reporte eliminado","alert");
+}
+function copyFolio(){ if(navigator.clipboard) navigator.clipboard.writeText(activeModalReportId); showToast("Folio copiado","success"); }
+
+/* ---------- Datos: ejemplos, limpieza, exportación ---------- */
+function resetToSampleData(){ reports=clone(defaultReports); saveToBrowserStorage(); updateDashboard(); fitAll(); showToast("Se cargaron los ejemplos iniciales de Bogotá","info"); }
+function clearAllReports(){
+  if(confirm("¿Estás seguro de que deseas eliminar todos los reportes almacenados?")){
+    reports=[]; saveToBrowserStorage(); updateDashboard(); showToast("Todos los reportes fueron eliminados","alert"); }
+}
+function download(name,txt,mime){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:mime})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+function exportCSV(){
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const head=['Folio','Tipo','Prioridad','Estado','Fecha','Ubicación','Lat','Lng','Descripción','Denunciante','Teléfono'];
+  const rows=reports.map(r=>[r.id,r.type,r.urgency,r.status,r.time,r.location,r.lat,r.lng,r.desc,r.userName,r.userPhone].map(q).join(','));
+  download('reportes_alertaciudadana.csv','\ufeff'+[head.join(',')].concat(rows).join('\n'),'text/csv;charset=utf-8');
+  showToast("CSV exportado","success");
+}
+function exportJSON(){ download('respaldo_alertaciudadana.json',JSON.stringify(reports,null,2),'application/json'); showToast("Respaldo JSON exportado","success"); }
+
+/* ---------- Sincronización entre pestañas ---------- */
+window.addEventListener('storage',e=>{
+  if(e.key!==DB_KEY) return;
+  const prev=reports.length;
+  try{ reports=JSON.parse(e.newValue)||[]; }catch(err){ return; }
+  updateBadge();
+  if(reports.length>prev){ showToast("Nuevo reporte recibido","alert"); beep(); }
+  if(!$('view-police').classList.contains('hidden')) updateDashboard();
+});
+setInterval(()=>{ if(!$('view-police').classList.contains('hidden')) updateDashboard(); },60000); // refresca tiempos y SLA
+
+/* ---------- Modo oscuro ---------- */
+const isDark=()=>document.documentElement.classList.contains('dark');
+function paintThemeBtn(){ $('themeBtn').innerHTML=`<i data-lucide="${isDark()?'sun':'moon'}" class="w-4 h-4"></i>`; lucide.createIcons(); }
+function toggleTheme(){
+  document.documentElement.classList.toggle('dark');
+  try{ localStorage.setItem('ac_theme',isDark()?'dark':'light'); }catch(e){}
+  paintThemeBtn();
+  if(!$('view-police').classList.contains('hidden')) renderCharts();
+  showToast(isDark()?'Modo oscuro activado':'Modo claro activado','info');
+}
+
+/* ---------- Inicio ---------- */
+lucide.createIcons();
+$('crimeTime').value=nowLocal();
+fillTypeFilter(); initMiniMap(); updateBadge(); paintThemeBtn(); renderRecentFolios(); updateFormProgress();
+</script>
+</body>
+</html>
